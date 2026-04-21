@@ -17,6 +17,86 @@ if (process.platform === 'win32') {
   }
 }
 
+// ── Focus guard: only whip known terminal / editor apps ─────────────────────
+// Matched against the OS's frontmost-app identifier:
+//   macOS  — `name of first process whose frontmost is true` (app display name)
+//   win32  — process image name (e.g. "WindowsTerminal.exe")
+//   linux  — xdotool getwindowclassname (matched as case-insensitive substring)
+const TERMINAL_APPS = {
+  darwin: [
+    'Terminal', 'iTerm2', 'iTerm', 'Ghostty', 'Alacritty', 'WezTerm',
+    'kitty', 'Warp', 'Hyper', 'Tabby',
+    'Code', 'Code - Insiders', 'Cursor', 'VSCodium', 'Zed',
+    'Electron',
+  ],
+  win32: [
+    'WindowsTerminal.exe', 'wezterm-gui.exe', 'alacritty.exe',
+    'Hyper.exe', 'Tabby.exe', 'conhost.exe',
+    'Code.exe', 'Cursor.exe', 'Zed.exe',
+    'powershell.exe', 'pwsh.exe', 'cmd.exe',
+  ],
+  linux: [
+    'gnome-terminal', 'konsole', 'xterm', 'alacritty', 'kitty',
+    'wezterm', 'ghostty', 'tilix', 'terminator',
+    'code', 'cursor', 'zed',
+  ],
+};
+
+function getFrontmostAppDarwin() {
+  return new Promise(resolve => {
+    const script = 'tell application "System Events" to get name of first process whose frontmost is true';
+    execFile('osascript', ['-e', script], (err, stdout) => {
+      resolve(err ? null : (stdout || '').trim());
+    });
+  });
+}
+
+function getFrontmostAppLinux() {
+  return new Promise(resolve => {
+    execFile('xdotool', ['getactivewindow', 'getwindowclassname'], (err, stdout) => {
+      resolve(err ? null : (stdout || '').trim().toLowerCase());
+    });
+  });
+}
+
+function getFrontmostAppWin32() {
+  return new Promise(resolve => {
+    const ps = [
+      'Add-Type @"',
+      'using System;',
+      'using System.Runtime.InteropServices;',
+      'public class U {',
+      '  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();',
+      '  [DllImport("user32.dll")] public static extern int GetWindowThreadProcessId(IntPtr hWnd, out int pid);',
+      '}',
+      '"@',
+      '$p = 0',
+      '[void][U]::GetWindowThreadProcessId([U]::GetForegroundWindow(), [ref]$p)',
+      '(Get-Process -Id $p).ProcessName + ".exe"',
+    ].join('\n');
+    execFile('powershell', ['-NoProfile', '-Command', ps], (err, stdout) => {
+      resolve(err ? null : (stdout || '').trim());
+    });
+  });
+}
+
+function isAllowedTerminal(id) {
+  if (!id) return false;
+  const list = TERMINAL_APPS[process.platform] || [];
+  if (process.platform === 'linux') {
+    const lo = id.toLowerCase();
+    return list.some(n => lo.includes(n));
+  }
+  return list.some(n => n.toLowerCase() === id.toLowerCase());
+}
+
+async function getFrontmostApp() {
+  if (process.platform === 'darwin') return getFrontmostAppDarwin();
+  if (process.platform === 'win32') return getFrontmostAppWin32();
+  if (process.platform === 'linux') return getFrontmostAppLinux();
+  return null;
+}
+
 // ── Globals ─────────────────────────────────────────────────────────────────
 let tray, overlay;
 let overlayReady = false;
@@ -171,8 +251,13 @@ function toggleOverlay() {
 }
 
 // ── IPC ─────────────────────────────────────────────────────────────────────
-ipcMain.on('whip-crack', () => {
+ipcMain.on('whip-crack', async () => {
   try {
+    const frontmost = await getFrontmostApp();
+    if (!isAllowedTerminal(frontmost)) {
+      console.warn(`openwhip: focused app "${frontmost || 'unknown'}" is not in the terminal allow-list — skipping macro.`);
+      return;
+    }
     sendMacro();
   } catch (err) {
     console.warn('sendMacro failed:', err?.message || err);
