@@ -147,10 +147,7 @@ function createTrayIconFallback() {
   const p = path.join(__dirname, 'icon', 'Template.png');
   if (fs.existsSync(p)) {
     const img = nativeImage.createFromPath(p);
-    if (!img.isEmpty()) {
-      if (process.platform === 'darwin') img.setTemplateImage(true);
-      return img;
-    }
+    if (!img.isEmpty()) return img;
   }
   console.warn('openwhip: icon/Template.png missing or invalid');
   return nativeImage.createEmpty();
@@ -375,7 +372,6 @@ app.whenReady().then(async () => {
   if (process.platform === 'darwin' && !icon.isEmpty()) {
     // Source icons ship at 512×/1024× for the Dock; macOS menu bar expects ~22pt.
     icon = icon.resize({ height: 22 });
-    icon.setTemplateImage(true);
   }
   tray = new Tray(icon);
   tray.setToolTip('OpenWhip - click for whip');
