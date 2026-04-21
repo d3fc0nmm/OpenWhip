@@ -201,8 +201,13 @@ async function getTrayIcon() {
 }
 
 // ── Overlay window ──────────────────────────────────────────────────────────
+function cursorDisplayBounds() {
+  const point = screen.getCursorScreenPoint();
+  return screen.getDisplayNearestPoint(point).bounds;
+}
+
 function createOverlay() {
-  const { bounds } = screen.getPrimaryDisplay();
+  const bounds = cursorDisplayBounds();
   overlay = new BrowserWindow({
     x: bounds.x, y: bounds.y,
     width: bounds.width, height: bounds.height,
@@ -240,7 +245,11 @@ function toggleOverlay() {
     overlay.webContents.send('drop-whip');
     return;
   }
-  if (!overlay) createOverlay();
+  if (!overlay) {
+    createOverlay();
+  } else {
+    overlay.setBounds(cursorDisplayBounds());
+  }
   overlay.show();
   if (overlayReady) {
     overlay.webContents.send('spawn-whip');
