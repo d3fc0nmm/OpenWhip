@@ -371,7 +371,13 @@ function sendMacroLinux(text) {
 
 // ── App lifecycle ───────────────────────────────────────────────────────────
 app.whenReady().then(async () => {
-  tray = new Tray(await getTrayIcon());
+  let icon = await getTrayIcon();
+  if (process.platform === 'darwin' && !icon.isEmpty()) {
+    // Source icons ship at 512×/1024× for the Dock; macOS menu bar expects ~22pt.
+    icon = icon.resize({ height: 22 });
+    icon.setTemplateImage(true);
+  }
+  tray = new Tray(icon);
   tray.setToolTip('OpenWhip - click for whip');
   tray.setContextMenu(
     Menu.buildFromTemplate([
