@@ -102,6 +102,32 @@ let tray, overlay;
 let overlayReady = false;
 let spawnQueued = false;
 
+// ── Mode + settings persistence ─────────────────────────────────────────────
+// 'whip'  : Ctrl+C, type a phrase, Enter   (the original behavior)
+// 'enter' : press Enter only               (useful for nudging prompts)
+const MODES = { WHIP: 'whip', ENTER: 'enter' };
+let macroMode = MODES.WHIP;
+let settingsPath = null;
+
+function loadSettings() {
+  if (!settingsPath) return;
+  try {
+    const raw = fs.readFileSync(settingsPath, 'utf8');
+    const s = JSON.parse(raw);
+    if (s && (s.mode === MODES.WHIP || s.mode === MODES.ENTER)) macroMode = s.mode;
+  } catch { /* first run or corrupt — keep default */ }
+}
+
+function saveSettings() {
+  if (!settingsPath) return;
+  try {
+    fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
+    fs.writeFileSync(settingsPath, JSON.stringify({ mode: macroMode }, null, 2));
+  } catch (e) {
+    console.warn('settings save failed:', e?.message || e);
+  }
+}
+
 const VK_CONTROL = 0x11;
 const VK_RETURN  = 0x0D;
 const VK_C       = 0x43;
@@ -271,9 +297,12 @@ ipcMain.on('whip-crack', async () => {
 });
 ipcMain.on('hide-overlay', () => { if (overlay) overlay.hide(); });
 
-// ── Macro: immediate Ctrl+C, type "Go FASER", Enter ───────────────────────
+// ── Macro dispatch ─────────────────────────────────────────────────────────
 function sendMacro() {
-  // Pick a random phrase from a list of similar phrases and type it out
+  if (macroMode === MODES.ENTER) {
+    sendEnterOnly();
+    return;
+  }
   const phrases = [
     'FASTER',
     'FASTER',
@@ -291,6 +320,22 @@ function sendMacro() {
     sendMacroMac(chosen);
   } else if (process.platform === 'linux') {
     sendMacroLinux(chosen);
+  }
+}
+
+function sendEnterOnly() {
+  if (process.platform === 'win32') {
+    if (!keybd_event) return;
+    keybd_event(VK_RETURN, 0, 0, 0);
+    keybd_event(VK_RETURN, 0, KEYUP, 0);
+  } else if (process.platform === 'darwin') {
+    execFile('osascript', ['-e', 'tell application "System Events" to key code 36'], err => {
+      if (err) console.warn('enter macro failed:', err.message);
+    });
+  } else if (process.platform === 'linux') {
+    execFile('xdotool', ['key', 'Return'], err => {
+      if (err) console.warn('linux enter macro failed:', err.message);
+    });
   }
 }
 
@@ -367,7 +412,37 @@ function sendMacroLinux(text) {
 }
 
 // ── App lifecycle ───────────────────────────────────────────────────────────
+function rebuildTrayMenu() {
+  if (!tray) return;
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      {
+        label: 'Mode',
+        submenu: [
+          {
+            label: 'Whip (Ctrl+C + phrase + Enter)',
+            type: 'radio',
+            checked: macroMode === MODES.WHIP,
+            click: () => { macroMode = MODES.WHIP; saveSettings(); rebuildTrayMenu(); },
+          },
+          {
+            label: 'Press Enter only',
+            type: 'radio',
+            checked: macroMode === MODES.ENTER,
+            click: () => { macroMode = MODES.ENTER; saveSettings(); rebuildTrayMenu(); },
+          },
+        ],
+      },
+      { type: 'separator' },
+      { label: 'Quit', click: () => app.quit() },
+    ])
+  );
+}
+
 app.whenReady().then(async () => {
+  settingsPath = path.join(app.getPath('userData'), 'settings.json');
+  loadSettings();
+
   let icon = await getTrayIcon();
   if (process.platform === 'darwin' && !icon.isEmpty()) {
     // Source icons ship at 512×/1024× for the Dock; macOS menu bar expects ~22pt.
@@ -375,11 +450,7 @@ app.whenReady().then(async () => {
   }
   tray = new Tray(icon);
   tray.setToolTip('OpenWhip - click for whip');
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      { label: 'Quit', click: () => app.quit() },
-    ])
-  );
+  rebuildTrayMenu();
   tray.on('click', toggleOverlay);
 });
 
