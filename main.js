@@ -135,8 +135,17 @@ const VK_MENU    = 0x12; // Alt
 const VK_TAB     = 0x09;
 const KEYUP      = 0x0002;
 
-/** One Alt+Tab / Cmd+Tab so focus returns to the previously active app after tray click. */
-function refocusPreviousApp() {
+/**
+ * If OpenWhip stole focus on tray click (happens in dev mode without LSUIElement),
+ * Cmd+Tab / Alt+Tab once to return focus to whatever the user was last using.
+ * Skip the refocus entirely when OpenWhip isn't frontmost — otherwise we'd send
+ * the user away from the app they actually have open.
+ */
+async function refocusPreviousApp() {
+  const SELF_NAMES = new Set(['openwhip', 'electron', 'openwhip.exe', 'electron.exe']);
+  const frontmost = await getFrontmostApp();
+  if (!frontmost || !SELF_NAMES.has(frontmost.toLowerCase())) return;
+
   const delayMs = 80;
   const run = () => {
     if (process.platform === 'win32') {
