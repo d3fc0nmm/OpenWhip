@@ -24,6 +24,29 @@ sudo apt install xdotool
 - Whip him 😩💢
 - It sends an interrupt (Ctrl-C) and one of 5 encouraging messages!
 
+For safety, OpenWhip only sends keystrokes when a known terminal or editor is focused (Terminal, iTerm, Ghostty, Alacritty, WezTerm, kitty, Warp, Hyper, VS Code, Cursor, Zed, and friends). If yours isn't on the list, open an issue.
+
+## Modes
+
+Right-click the tray icon for a Mode submenu:
+
+- **Whip** — Ctrl+C, phrase, Enter. The original.
+- **Press Enter only** — just Enter. Nudge claude past a y/n prompt without interrupting him.
+
+Your choice sticks across restarts.
+
+## macOS .app (optional)
+
+If you'd rather run OpenWhip as a proper menu-bar app (no Dock icon, no terminal window hanging around):
+
+```bash
+npm install
+npm run package
+open "out/OpenWhip-darwin-arm64/OpenWhip.app"
+```
+
+Override the arch with `OPENWHIP_ARCH=x64 npm run package` for Intel Macs.
+
 ## Roadmap
 
 - [x] Initial release! 🥳
