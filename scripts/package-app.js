@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 const { packager } = require('@electron/packager');
 const path = require('path');
+const { execFileSync } = require('child_process');
+const fs = require('fs');
 
 const root = path.resolve(__dirname, '..');
 
@@ -29,6 +31,21 @@ packager({
   .then(paths => {
     console.log('Packaged:');
     paths.forEach(p => console.log('  ' + p));
+
+    // Ad-hoc codesign so macOS TCC (Accessibility / Automation) approvals stick across rebuilds.
+    // Without this, an unsigned bundle gets a fresh runtime identity each build and silently
+    // drops keystroke permissions even though System Settings still shows it as approved.
+    for (const outDir of paths) {
+      const appPath = fs.readdirSync(outDir).find(f => f.endsWith('.app'));
+      if (!appPath) continue;
+      const fullAppPath = path.join(outDir, appPath);
+      console.log('Ad-hoc signing:', fullAppPath);
+      execFileSync(
+        'codesign',
+        ['--force', '--deep', '--sign', '-', fullAppPath],
+        { stdio: 'inherit' }
+      );
+    }
   })
   .catch(err => {
     console.error(err);
