@@ -35,6 +35,15 @@ Right-click the tray icon for a Mode submenu:
 
 Your choice sticks across restarts.
 
+## macOS permissions
+
+Sending keystrokes to a terminal needs macOS's blessing:
+
+- **iTerm2** — OpenWhip drives it through iTerm2's own AppleScript API, so you only see a one-time *"OpenWhip wants to control iTerm2"* modal. Click Allow and you're done. No Accessibility toggle, no fighting with System Settings.
+- **Other terminals** (Terminal.app, Ghostty, WezTerm, etc.) — falls back to a System Events keystroke, which means OpenWhip needs to be in **System Settings → Privacy & Security → Accessibility** with its toggle on.
+
+If you hear the whip crack but no keystrokes show up in your terminal, you've probably hit macOS's silent-drop bug for unsigned bundles — TCC keeps the Accessibility toggle "on" in the UI but rejects the keystrokes at runtime. Easiest fixes: switch to iTerm2 (uses the AppleScript path above) or run OpenWhip from source via `npm start`.
+
 ## macOS .app (optional)
 
 If you'd rather run OpenWhip as a proper menu-bar app (no Dock icon, no terminal window hanging around):
@@ -45,7 +54,7 @@ npm run package
 open "out/OpenWhip-darwin-arm64/OpenWhip.app"
 ```
 
-Override the arch with `OPENWHIP_ARCH=x64 npm run package` for Intel Macs.
+Override the arch with `OPENWHIP_ARCH=x64 npm run package` for Intel Macs. The packaged build is ad-hoc codesigned (`scripts/package-app.js`) so its identity stays stable across launches.
 
 ## Roadmap
 
