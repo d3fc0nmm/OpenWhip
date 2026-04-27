@@ -299,7 +299,7 @@ ipcMain.on('whip-crack', async () => {
       console.warn(`openwhip: focused app "${frontmost || 'unknown'}" is not in the terminal allow-list — skipping macro.`);
       return;
     }
-    sendMacro();
+    sendMacro(frontmost);
   } catch (err) {
     console.warn('sendMacro failed:', err?.message || err);
   }
@@ -307,9 +307,9 @@ ipcMain.on('whip-crack', async () => {
 ipcMain.on('hide-overlay', () => { if (overlay) overlay.hide(); });
 
 // ── Macro dispatch ─────────────────────────────────────────────────────────
-function sendMacro() {
+function sendMacro(frontmost) {
   if (macroMode === MODES.ENTER) {
-    sendEnterOnly();
+    sendEnterOnly(frontmost);
     return;
   }
   const phrases = [
@@ -326,18 +326,28 @@ function sendMacro() {
   if (process.platform === 'win32') {
     sendMacroWindows(chosen);
   } else if (process.platform === 'darwin') {
-    sendMacroMac(chosen);
+    sendMacroMac(chosen, frontmost);
   } else if (process.platform === 'linux') {
     sendMacroLinux(chosen);
   }
 }
 
-function sendEnterOnly() {
+function sendEnterOnly(frontmost) {
   if (process.platform === 'win32') {
     if (!keybd_event) return;
     keybd_event(VK_RETURN, 0, 0, 0);
     keybd_event(VK_RETURN, 0, KEYUP, 0);
   } else if (process.platform === 'darwin') {
+    // iTerm2 has its own AppleScript dictionary; using it goes through Automation
+    // (per-app prompt) instead of Accessibility, which sidesteps macOS's silent-deny
+    // behavior for keystrokes from unsigned/ad-hoc-signed bundles.
+    if (frontmost === 'iTerm2') {
+      const script = 'tell application "iTerm2" to tell current session of current window to write text "" newline yes';
+      execFile('osascript', ['-e', script], err => {
+        if (err) console.warn('iterm enter macro failed:', err.message);
+      });
+      return;
+    }
     execFile('osascript', ['-e', 'tell application "System Events" to key code 36'], err => {
       if (err) console.warn('enter macro failed:', err.message);
     });
@@ -374,8 +384,28 @@ function sendMacroWindows(text) {
   keybd_event(VK_RETURN, 0, KEYUP, 0);
 }
 
-function sendMacroMac(text) {
+function sendMacroMac(text, frontmost) {
   const escaped = text.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+
+  // iTerm2 path: write directly to the session's tty. ETX (ASCII 3) at tty input
+  // is the kernel's interrupt char and produces SIGINT on the foreground process,
+  // matching the Ctrl+C behavior. Avoids Accessibility entirely.
+  if (frontmost === 'iTerm2') {
+    const script = [
+      'tell application "iTerm2"',
+      '  tell current session of current window',
+      '    write text (ASCII character 3) newline no',
+      '    delay 0.3',
+      `    write text "${escaped}" newline yes`,
+      '  end tell',
+      'end tell',
+    ].join('\n');
+    execFile('osascript', ['-e', script], err => {
+      if (err) console.warn('iterm macro failed:', err.message);
+    });
+    return;
+  }
+
   const interruptScript = [
     'tell application "System Events"',
     '  key code 8 using {control down}', // Ctrl+C interrupt
