@@ -98,7 +98,7 @@ async function getFrontmostApp() {
 }
 
 // ── Globals ─────────────────────────────────────────────────────────────────
-let tray, overlay;
+let tray, overlay, trayMenu;
 let overlayReady = false;
 let spawnQueued = false;
 
@@ -523,37 +523,39 @@ function sendMacroLinux(text) {
 }
 
 // ── App lifecycle ───────────────────────────────────────────────────────────
+// We deliberately don't call tray.setContextMenu — when it's set, macOS
+// makes the menu the primary left-click action and Electron dispatches the
+// `click` event inconsistently. Splitting gestures (left = toggle overlay,
+// right = pop menu manually) keeps drop-on-left-click reliable.
 function rebuildTrayMenu() {
   if (!tray) return;
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      {
-        label: 'Mode',
-        submenu: [
-          {
-            label: 'Whip (Ctrl+C + phrase + Enter)',
-            type: 'radio',
-            checked: macroMode === MODES.WHIP,
-            click: () => setMode(MODES.WHIP),
-          },
-          {
-            label: 'Press Enter only',
-            type: 'radio',
-            checked: macroMode === MODES.ENTER,
-            click: () => setMode(MODES.ENTER),
-          },
-          {
-            label: 'Type "continue" + Enter',
-            type: 'radio',
-            checked: macroMode === MODES.CONTINUE,
-            click: () => setMode(MODES.CONTINUE),
-          },
-        ],
-      },
-      { type: 'separator' },
-      { label: 'Quit', click: () => app.quit() },
-    ])
-  );
+  trayMenu = Menu.buildFromTemplate([
+    {
+      label: 'Mode',
+      submenu: [
+        {
+          label: 'Whip (Ctrl+C + phrase + Enter)',
+          type: 'radio',
+          checked: macroMode === MODES.WHIP,
+          click: () => setMode(MODES.WHIP),
+        },
+        {
+          label: 'Press Enter only',
+          type: 'radio',
+          checked: macroMode === MODES.ENTER,
+          click: () => setMode(MODES.ENTER),
+        },
+        {
+          label: 'Type "continue" + Enter',
+          type: 'radio',
+          checked: macroMode === MODES.CONTINUE,
+          click: () => setMode(MODES.CONTINUE),
+        },
+      ],
+    },
+    { type: 'separator' },
+    { label: 'Quit', click: () => app.quit() },
+  ]);
 }
 
 app.whenReady().then(async () => {
@@ -566,9 +568,12 @@ app.whenReady().then(async () => {
     icon = icon.resize({ height: 22 });
   }
   tray = new Tray(icon);
-  tray.setToolTip('OpenWhip - click for whip');
+  tray.setToolTip('OpenWhip - left click to toggle whip, right click for menu');
   rebuildTrayMenu();
   tray.on('click', toggleOverlay);
+  tray.on('right-click', () => {
+    if (trayMenu) tray.popUpContextMenu(trayMenu);
+  });
 });
 
 app.on('window-all-closed', e => e.preventDefault()); // keep alive in tray

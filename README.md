@@ -19,12 +19,12 @@ sudo apt install xdotool
 
 ## Controls
 
-- Click tray icon: spawn whip.
-- Click tray icon again: drop whip.
+- **Left-click tray icon**: spawn / drop the whip (toggles).
+- **Right-click tray icon**: open the menu (mode submenu, quit).
 - Whip him 😩💢
 - It sends an interrupt (Ctrl-C) and one of 5 encouraging messages!
 
-The overlay is fully click-through, so you can keep working in your terminal (or click the tray menu to change modes) while the whip is alive.
+The overlay is fully click-through, so you can keep working in your terminal while the whip is alive.
 
 For safety, OpenWhip only sends keystrokes when a known terminal or editor is focused (Terminal, iTerm, Ghostty, Alacritty, WezTerm, kitty, Warp, Hyper, VS Code, Cursor, Zed, and friends). If yours isn't on the list, open an issue.
 
