@@ -103,10 +103,16 @@ let overlayReady = false;
 let spawnQueued = false;
 
 // ── Mode + settings persistence ─────────────────────────────────────────────
-// 'whip'     : Ctrl+C, type a phrase, Enter   (the original behavior)
-// 'enter'    : press Enter only               (useful for nudging prompts)
-// 'continue' : type "continue", press Enter   (push past claude's continue prompts)
-const MODES = { WHIP: 'whip', ENTER: 'enter', CONTINUE: 'continue' };
+// 'whip'        : Ctrl+C, type a phrase, Enter   (the original behavior)
+// 'continue'    : type "continue", press Enter
+// 'looks_good'  : type "looks good", press Enter
+// 'enter'       : press Enter only               (gentlest nudge)
+const MODES = {
+  WHIP: 'whip',
+  CONTINUE: 'continue',
+  LOOKS_GOOD: 'looks_good',
+  ENTER: 'enter',
+};
 const VALID_MODES = new Set(Object.values(MODES));
 let macroMode = MODES.WHIP;
 let settingsPath = null;
@@ -334,7 +340,11 @@ function sendMacro(frontmost) {
     return;
   }
   if (macroMode === MODES.CONTINUE) {
-    sendContinue(frontmost);
+    sendTypeText('continue', frontmost);
+    return;
+  }
+  if (macroMode === MODES.LOOKS_GOOD) {
+    sendTypeText('looks good', frontmost);
     return;
   }
   const phrases = [
@@ -383,7 +393,9 @@ function sendEnterOnly(frontmost) {
   }
 }
 
-function sendContinue(frontmost) {
+// Type `text` then press Enter, no interrupt. Shared by the "continue" and
+// "looks good" modes so adding more typed-message modes is a one-line dispatch.
+function sendTypeText(text, frontmost) {
   if (process.platform === 'win32') {
     if (!keybd_event || !VkKeyScanA) return;
     const tapKey = vk => {
@@ -399,32 +411,33 @@ function sendContinue(frontmost) {
       tapKey(vk);
       if (shiftState & 1) keybd_event(0x10, 0, KEYUP, 0);
     };
-    for (const ch of 'continue') tapChar(ch);
+    for (const ch of text) tapChar(ch);
     keybd_event(VK_RETURN, 0, 0, 0);
     keybd_event(VK_RETURN, 0, KEYUP, 0);
   } else if (process.platform === 'darwin') {
+    const escaped = text.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
     if (frontmost === 'iTerm2') {
-      const script = 'tell application "iTerm2" to tell current session of current window to write text "continue" newline yes';
+      const script = `tell application "iTerm2" to tell current session of current window to write text "${escaped}" newline yes`;
       execFile('osascript', ['-e', script], err => {
-        if (err) console.warn('iterm continue macro failed:', err.message);
+        if (err) console.warn(`iterm "${text}" macro failed:`, err.message);
       });
       return;
     }
     const script = [
       'tell application "System Events"',
-      '  keystroke "continue"',
+      `  keystroke "${escaped}"`,
       '  key code 36',
       'end tell',
     ].join('\n');
     execFile('osascript', ['-e', script], err => {
-      if (err) console.warn('continue macro failed:', err.message);
+      if (err) console.warn(`"${text}" macro failed:`, err.message);
     });
   } else if (process.platform === 'linux') {
     execFile(
       'xdotool',
-      ['type', '--delay', '1', '--clearmodifiers', '--', 'continue', 'key', 'Return'],
+      ['type', '--delay', '1', '--clearmodifiers', '--', text, 'key', 'Return'],
       err => {
-        if (err) console.warn('linux continue macro failed:', err.message);
+        if (err) console.warn(`linux "${text}" macro failed:`, err.message);
       }
     );
   }
@@ -534,22 +547,28 @@ function rebuildTrayMenu() {
       label: 'Mode',
       submenu: [
         {
-          label: 'Whip (Ctrl+C + phrase + Enter)',
+          label: 'Whip  (Ctrl+C + phrase + Enter)',
           type: 'radio',
           checked: macroMode === MODES.WHIP,
           click: () => setMode(MODES.WHIP),
+        },
+        {
+          label: 'Type  "continue"  + Enter',
+          type: 'radio',
+          checked: macroMode === MODES.CONTINUE,
+          click: () => setMode(MODES.CONTINUE),
+        },
+        {
+          label: 'Type  "looks good"  + Enter',
+          type: 'radio',
+          checked: macroMode === MODES.LOOKS_GOOD,
+          click: () => setMode(MODES.LOOKS_GOOD),
         },
         {
           label: 'Press Enter only',
           type: 'radio',
           checked: macroMode === MODES.ENTER,
           click: () => setMode(MODES.ENTER),
-        },
-        {
-          label: 'Type "continue" + Enter',
-          type: 'radio',
-          checked: macroMode === MODES.CONTINUE,
-          click: () => setMode(MODES.CONTINUE),
         },
       ],
     },

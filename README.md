@@ -30,11 +30,12 @@ For safety, OpenWhip only sends keystrokes when a known terminal or editor is fo
 
 ## Modes
 
-Right-click the tray icon for a Mode submenu:
+Right-click the tray icon for a Mode submenu, ordered loudest to softest:
 
-- **Whip** — Ctrl+C, phrase, Enter. The original.
-- **Press Enter only** — just Enter. Nudge claude past a y/n prompt without interrupting him.
-- **Type "continue" + Enter** — types the word `continue` and submits. For when claude has stopped and you want him to keep going without yelling at him.
+- **Whip** — Ctrl+C, phrase, Enter. The original. Interrupts whatever claude is doing.
+- **Type "continue" + Enter** — types `continue` and submits. For when claude has stopped and you want him to keep going.
+- **Type "looks good" + Enter** — types `looks good` and submits. For approving whatever claude just showed you.
+- **Press Enter only** — just Enter. Nudges past a y/n prompt without typing anything.
 
 Your choice sticks across restarts.
 
