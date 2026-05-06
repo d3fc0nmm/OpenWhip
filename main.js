@@ -103,9 +103,11 @@ let overlayReady = false;
 let spawnQueued = false;
 
 // ── Mode + settings persistence ─────────────────────────────────────────────
-// 'whip'  : Ctrl+C, type a phrase, Enter   (the original behavior)
-// 'enter' : press Enter only               (useful for nudging prompts)
-const MODES = { WHIP: 'whip', ENTER: 'enter' };
+// 'whip'     : Ctrl+C, type a phrase, Enter   (the original behavior)
+// 'enter'    : press Enter only               (useful for nudging prompts)
+// 'continue' : type "continue", press Enter   (push past claude's continue prompts)
+const MODES = { WHIP: 'whip', ENTER: 'enter', CONTINUE: 'continue' };
+const VALID_MODES = new Set(Object.values(MODES));
 let macroMode = MODES.WHIP;
 let settingsPath = null;
 
@@ -114,7 +116,7 @@ function loadSettings() {
   try {
     const raw = fs.readFileSync(settingsPath, 'utf8');
     const s = JSON.parse(raw);
-    if (s && (s.mode === MODES.WHIP || s.mode === MODES.ENTER)) macroMode = s.mode;
+    if (s && VALID_MODES.has(s.mode)) macroMode = s.mode;
   } catch { /* first run or corrupt — keep default */ }
 }
 
@@ -125,6 +127,19 @@ function saveSettings() {
     fs.writeFileSync(settingsPath, JSON.stringify({ mode: macroMode }, null, 2));
   } catch (e) {
     console.warn('settings save failed:', e?.message || e);
+  }
+}
+
+// Selecting a tray-menu radio steals focus and teleports the cursor; when the
+// menu closes, the next mousemove makes the whip handle jump, which can
+// trigger a spurious crack. Re-engage the renderer's spawn grace period so
+// the chain has time to settle before any new crack registers.
+function setMode(mode) {
+  macroMode = mode;
+  saveSettings();
+  rebuildTrayMenu();
+  if (overlay && !overlay.isDestroyed()) {
+    overlay.webContents.send('mode-changed');
   }
 }
 
@@ -255,6 +270,12 @@ function createOverlay() {
     },
   });
   overlay.setAlwaysOnTop(true, 'screen-saver');
+  // Pass clicks through to underlying windows. The overlay sits above tray
+  // menus and other apps at screen-saver level; without this, every click
+  // lands on the canvas first and never reaches the intended target. With
+  // forward: true, mousemove still fires so cursor tracking and crack
+  // detection keep working — only click/down/up are forwarded.
+  overlay.setIgnoreMouseEvents(true, { forward: true });
   overlayReady = false;
   overlay.loadFile('overlay.html');
   overlay.webContents.on('did-finish-load', () => {
@@ -312,6 +333,10 @@ function sendMacro(frontmost) {
     sendEnterOnly(frontmost);
     return;
   }
+  if (macroMode === MODES.CONTINUE) {
+    sendContinue(frontmost);
+    return;
+  }
   const phrases = [
     'FASTER',
     'FASTER',
@@ -355,6 +380,53 @@ function sendEnterOnly(frontmost) {
     execFile('xdotool', ['key', 'Return'], err => {
       if (err) console.warn('linux enter macro failed:', err.message);
     });
+  }
+}
+
+function sendContinue(frontmost) {
+  if (process.platform === 'win32') {
+    if (!keybd_event || !VkKeyScanA) return;
+    const tapKey = vk => {
+      keybd_event(vk, 0, 0, 0);
+      keybd_event(vk, 0, KEYUP, 0);
+    };
+    const tapChar = ch => {
+      const packed = VkKeyScanA(ch.charCodeAt(0));
+      if (packed === -1) return;
+      const vk = packed & 0xff;
+      const shiftState = (packed >> 8) & 0xff;
+      if (shiftState & 1) keybd_event(0x10, 0, 0, 0);
+      tapKey(vk);
+      if (shiftState & 1) keybd_event(0x10, 0, KEYUP, 0);
+    };
+    for (const ch of 'continue') tapChar(ch);
+    keybd_event(VK_RETURN, 0, 0, 0);
+    keybd_event(VK_RETURN, 0, KEYUP, 0);
+  } else if (process.platform === 'darwin') {
+    if (frontmost === 'iTerm2') {
+      const script = 'tell application "iTerm2" to tell current session of current window to write text "continue" newline yes';
+      execFile('osascript', ['-e', script], err => {
+        if (err) console.warn('iterm continue macro failed:', err.message);
+      });
+      return;
+    }
+    const script = [
+      'tell application "System Events"',
+      '  keystroke "continue"',
+      '  key code 36',
+      'end tell',
+    ].join('\n');
+    execFile('osascript', ['-e', script], err => {
+      if (err) console.warn('continue macro failed:', err.message);
+    });
+  } else if (process.platform === 'linux') {
+    execFile(
+      'xdotool',
+      ['type', '--delay', '1', '--clearmodifiers', '--', 'continue', 'key', 'Return'],
+      err => {
+        if (err) console.warn('linux continue macro failed:', err.message);
+      }
+    );
   }
 }
 
@@ -462,13 +534,19 @@ function rebuildTrayMenu() {
             label: 'Whip (Ctrl+C + phrase + Enter)',
             type: 'radio',
             checked: macroMode === MODES.WHIP,
-            click: () => { macroMode = MODES.WHIP; saveSettings(); rebuildTrayMenu(); },
+            click: () => setMode(MODES.WHIP),
           },
           {
             label: 'Press Enter only',
             type: 'radio',
             checked: macroMode === MODES.ENTER,
-            click: () => { macroMode = MODES.ENTER; saveSettings(); rebuildTrayMenu(); },
+            click: () => setMode(MODES.ENTER),
+          },
+          {
+            label: 'Type "continue" + Enter',
+            type: 'radio',
+            checked: macroMode === MODES.CONTINUE,
+            click: () => setMode(MODES.CONTINUE),
           },
         ],
       },

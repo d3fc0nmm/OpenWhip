@@ -49,7 +49,7 @@ const P = {
   wallFriction:    0.86,   // tangential damping on wall hit
 
   // Crack detection
-  crackSpeed:     200,     // tip velocity threshold to trigger crack
+  crackSpeed:     240,     // tip velocity threshold to trigger crack
   crackCooldownMs:200,   // min ms between cracks
   firstCrackGraceMs: 350, // no crack (macro) until this long after spawn
 
@@ -87,9 +87,20 @@ let handleAngVel = 0;
 
 const WHIP_CRACK_SOUNDS = ['sounds/A.mp3', 'sounds/B.mp3', 'sounds/C.mp3', 'sounds/D.mp3', 'sounds/E.mp3'];
 
-document.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
-document.addEventListener('mousedown', () => {
-  if (whip && !dropping) dropping = true;
+// Cursor jumps (e.g. tray-menu click, alt-tab return) shouldn't register as a
+// whip stroke. If the new mouse position is implausibly far from the last
+// tracked position, treat it as a teleport: re-engage spawn grace + zero
+// out chain velocity so the handle's snap-to-cursor doesn't fling the tip.
+const TELEPORT_THRESHOLD = 200;
+document.addEventListener('mousemove', e => {
+  const nx = e.clientX, ny = e.clientY;
+  if (whip && (Math.abs(nx - mouseX) > TELEPORT_THRESHOLD || Math.abs(ny - mouseY) > TELEPORT_THRESHOLD)) {
+    whipSpawnTime = Date.now();
+    lastCrackTime = whipSpawnTime;
+    for (const p of whip) { p.px = p.x; p.py = p.y; }
+  }
+  mouseX = nx;
+  mouseY = ny;
 });
 
 // ── Whip creation ───────────────────────────────────────────────────────────
@@ -447,6 +458,18 @@ window.bridge.onSpawnWhip(() => {
 
 window.bridge.onDropWhip(() => {
   if (whip && !dropping) dropping = true;
+});
+
+// Tray-menu interactions teleport the cursor; when the menu closes, the
+// handle jump can fling the chain hard enough to register a phantom crack.
+// Reset the spawn grace + zero out chain velocity so the whip settles
+// quietly before crack detection re-engages.
+window.bridge.onModeChanged(() => {
+  whipSpawnTime = Date.now();
+  lastCrackTime = whipSpawnTime;
+  if (whip) {
+    for (const p of whip) { p.px = p.x; p.py = p.y; }
+  }
 });
 
 </script>

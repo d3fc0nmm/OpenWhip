@@ -20,9 +20,11 @@ sudo apt install xdotool
 ## Controls
 
 - Click tray icon: spawn whip.
-- Click: drop whip.
+- Click tray icon again: drop whip.
 - Whip him 😩💢
 - It sends an interrupt (Ctrl-C) and one of 5 encouraging messages!
+
+The overlay is fully click-through, so you can keep working in your terminal (or click the tray menu to change modes) while the whip is alive.
 
 For safety, OpenWhip only sends keystrokes when a known terminal or editor is focused (Terminal, iTerm, Ghostty, Alacritty, WezTerm, kitty, Warp, Hyper, VS Code, Cursor, Zed, and friends). If yours isn't on the list, open an issue.
 
@@ -32,6 +34,7 @@ Right-click the tray icon for a Mode submenu:
 
 - **Whip** — Ctrl+C, phrase, Enter. The original.
 - **Press Enter only** — just Enter. Nudge claude past a y/n prompt without interrupting him.
+- **Type "continue" + Enter** — types the word `continue` and submits. For when claude has stopped and you want him to keep going without yelling at him.
 
 Your choice sticks across restarts.
 
