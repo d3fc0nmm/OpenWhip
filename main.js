@@ -98,39 +98,73 @@ async function getFrontmostApp() {
 }
 
 // ── Globals ─────────────────────────────────────────────────────────────────
-let tray, overlay, trayMenu;
+let tray, overlay, trayMenu, prefsWindow;
 let overlayReady = false;
 let spawnQueued = false;
 
 // ── Mode + settings persistence ─────────────────────────────────────────────
-// 'whip'        : Ctrl+C, type a phrase, Enter   (the original behavior)
-// 'continue'    : type "continue", press Enter
-// 'looks_good'  : type "looks good", press Enter
-// 'enter'       : press Enter only               (gentlest nudge)
 const MODES = {
   WHIP: 'whip',
-  CONTINUE: 'continue',
-  LOOKS_GOOD: 'looks_good',
   ENTER: 'enter',
 };
-const VALID_MODES = new Set(Object.values(MODES));
+
+const DEFAULT_MESSAGES = {
+  whipPhrases: [
+    'FASTER',
+    'FASTER',
+    'FASTER',
+    'GO FASTER',
+    'Faster CLANKER',
+    'Work FASTER',
+    'Speed it up clanker',
+  ],
+  quickModes: [
+    { id: 'continue',   label: 'continue',   text: 'continue'   },
+    { id: 'looks_good', label: 'looks good', text: 'looks good' },
+  ],
+};
+
+const MAX_MESSAGE_LEN = 200;
+
 let macroMode = MODES.WHIP;
+let whipPhrases = DEFAULT_MESSAGES.whipPhrases.slice();
+let quickModes = DEFAULT_MESSAGES.quickModes.map(m => ({ ...m }));
 let settingsPath = null;
+
+function isValidMode(mode) {
+  if (mode === MODES.WHIP || mode === MODES.ENTER) return true;
+  return quickModes.some(m => m.id === mode);
+}
 
 function loadSettings() {
   if (!settingsPath) return;
   try {
     const raw = fs.readFileSync(settingsPath, 'utf8');
     const s = JSON.parse(raw);
-    if (s && VALID_MODES.has(s.mode)) macroMode = s.mode;
-  } catch { /* first run or corrupt — keep default */ }
+    if (s && typeof s === 'object') {
+      if (Array.isArray(s.whipPhrases)) {
+        whipPhrases = s.whipPhrases.filter(x => typeof x === 'string');
+      }
+      if (Array.isArray(s.quickModes)) {
+        quickModes = s.quickModes
+          .filter(m => m && typeof m.id === 'string' && typeof m.label === 'string' && typeof m.text === 'string')
+          .map(m => ({ id: m.id, label: m.label, text: m.text }));
+      }
+      if (typeof s.mode === 'string' && isValidMode(s.mode)) {
+        macroMode = s.mode;
+      } else {
+        macroMode = MODES.WHIP;
+      }
+    }
+  } catch { /* first run or corrupt — keep defaults */ }
 }
 
 function saveSettings() {
   if (!settingsPath) return;
   try {
     fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
-    fs.writeFileSync(settingsPath, JSON.stringify({ mode: macroMode }, null, 2));
+    const payload = { mode: macroMode, whipPhrases, quickModes };
+    fs.writeFileSync(settingsPath, JSON.stringify(payload, null, 2));
   } catch (e) {
     console.warn('settings save failed:', e?.message || e);
   }
