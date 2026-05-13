@@ -3,3 +3,4 @@ dist/
 out/
 *.tgz
 CLAUDE.md
+.superpowers/
