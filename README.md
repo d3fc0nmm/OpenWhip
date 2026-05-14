@@ -33,11 +33,19 @@ For safety, OpenWhip only sends keystrokes when a known terminal or editor is fo
 Right-click the tray icon for a Mode submenu, ordered loudest to softest:
 
 - **Whip** — Ctrl+C, phrase, Enter. The original. Interrupts whatever claude is doing.
-- **Type "continue" + Enter** — types `continue` and submits. For when claude has stopped and you want him to keep going.
-- **Type "looks good" + Enter** — types `looks good` and submits. For approving whatever claude just showed you.
+- **Type "<your label>" + Enter** — types your message and submits. Two are built in (`continue`, `looks good`) and you can add your own.
 - **Press Enter only** — just Enter. Nudges past a y/n prompt without typing anything.
 
 Your choice sticks across restarts.
+
+## Manage your messages
+
+Right-click the tray → **Messages…** opens a settings window where you can:
+
+- Edit the **whip phrases** — the pool of strings Whip mode picks from at random.
+- Edit the **quick modes** — the typed-message options shown in the Mode submenu. Add as many as you want.
+
+Changes apply immediately. There's a **Reset defaults** button if you want to start over.
 
 ## macOS permissions
 
