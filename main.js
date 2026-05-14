@@ -515,9 +515,19 @@ function sendTypeText(text, frontmost) {
   } else if (process.platform === 'darwin') {
     const escaped = text.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
     if (frontmost === 'iTerm2') {
-      // Hard-code a CR (ASCII 13) instead of using `newline yes` (which writes LF).
-      // TUI apps that distinguish the two treat CR as Enter and LF as a literal newline.
-      const script = `tell application "iTerm2" to tell current session of current window to write text ("${escaped}" & (ASCII character 13)) newline no`;
+      // Split text and CR with a brief delay. Bulk-writing text+CR atomically can
+      // race when the receiver (e.g. Claude Code's slash-command picker) is still
+      // processing the prefix, causing the CR to be consumed by picker UI instead
+      // of submitting the prompt. The delay lets receiver state settle first.
+      const script = [
+        'tell application "iTerm2"',
+        '  tell current session of current window',
+        `    write text "${escaped}" newline no`,
+        '    delay 0.15',
+        '    write text (ASCII character 13) newline no',
+        '  end tell',
+        'end tell',
+      ].join('\n');
       execFile('osascript', ['-e', script], err => {
         if (err) console.warn(`iterm "${text}" macro failed:`, err.message);
       });
@@ -581,7 +591,9 @@ function sendMacroMac(text, frontmost) {
       '  tell current session of current window',
       '    write text (ASCII character 3) newline no',
       '    delay 0.3',
-      `    write text ("${escaped}" & (ASCII character 13)) newline no`,
+      `    write text "${escaped}" newline no`,
+      '    delay 0.15',
+      '    write text (ASCII character 13) newline no',
       '  end tell',
       'end tell',
     ].join('\n');
