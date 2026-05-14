@@ -639,7 +639,29 @@ function sendMacroLinux(text) {
 // `click` event inconsistently. Splitting gestures (left = toggle overlay,
 // right = pop menu manually) keeps drop-on-left-click reliable.
 function openPrefsWindow() {
-  console.log('openPrefsWindow: not implemented yet');
+  if (prefsWindow && !prefsWindow.isDestroyed()) {
+    prefsWindow.show();
+    prefsWindow.focus();
+    return;
+  }
+  prefsWindow = new BrowserWindow({
+    width: 480,
+    height: 640,
+    title: 'OpenWhip · Messages',
+    resizable: true,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    backgroundColor: '#1c1c1c',
+    webPreferences: {
+      preload: path.join(__dirname, 'prefs-preload.js'),
+    },
+  });
+  prefsWindow.setMenuBarVisibility(false);
+  prefsWindow.loadFile('prefs.html');
+  prefsWindow.on('closed', () => {
+    prefsWindow = null;
+  });
 }
 
 function rebuildTrayMenu() {
