@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, screen } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, screen, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -366,6 +366,75 @@ ipcMain.on('whip-crack', async () => {
   }
 });
 ipcMain.on('hide-overlay', () => { if (overlay) overlay.hide(); });
+
+ipcMain.handle('prefs:get', () => {
+  return {
+    whipPhrases: whipPhrases.slice(),
+    quickModes: quickModes.map(m => ({ ...m })),
+  };
+});
+
+ipcMain.handle('prefs:save', (event, payload) => {
+  const incomingPhrases = Array.isArray(payload?.whipPhrases)
+    ? payload.whipPhrases
+        .filter(x => typeof x === 'string')
+        .map(x => x.trim())
+        .filter(x => x.length > 0 && x.length <= MAX_MESSAGE_LEN)
+    : whipPhrases.slice();
+  const incomingQuick = Array.isArray(payload?.quickModes)
+    ? payload.quickModes
+        .filter(m => m && typeof m.id === 'string' && typeof m.label === 'string' && typeof m.text === 'string')
+        .map(m => ({ id: m.id, label: m.label.trim(), text: m.text.trim() }))
+        .filter(m => m.label.length > 0 && m.text.length > 0 && m.text.length <= MAX_MESSAGE_LEN)
+    : quickModes.map(m => ({ ...m }));
+
+  // If the renderer is asking to delete the currently-active quick mode,
+  // confirm before applying so the user doesn't get switched silently.
+  const deletingActive =
+    payload?.confirmDeleteId === macroMode &&
+    !incomingQuick.some(m => m.id === macroMode);
+  if (deletingActive) {
+    const choice = dialog.showMessageBoxSync(prefsWindow || null, {
+      type: 'warning',
+      buttons: ['Cancel', 'Remove and switch to Whip'],
+      defaultId: 0,
+      cancelId: 0,
+      message: 'Remove the currently-active quick mode?',
+      detail: 'OpenWhip will switch to Whip mode.',
+    });
+    if (choice === 0) {
+      return {
+        whipPhrases: whipPhrases.slice(),
+        quickModes: quickModes.map(m => ({ ...m })),
+      };
+    }
+  }
+
+  whipPhrases = incomingPhrases;
+  quickModes = incomingQuick;
+  if (!isValidMode(macroMode)) macroMode = MODES.WHIP;
+  saveSettings();
+  rebuildTrayMenu();
+  if (overlay && !overlay.isDestroyed()) overlay.webContents.send('mode-changed');
+
+  return {
+    whipPhrases: whipPhrases.slice(),
+    quickModes: quickModes.map(m => ({ ...m })),
+  };
+});
+
+ipcMain.handle('prefs:reset', () => {
+  whipPhrases = DEFAULT_MESSAGES.whipPhrases.slice();
+  quickModes = DEFAULT_MESSAGES.quickModes.map(m => ({ ...m }));
+  if (!isValidMode(macroMode)) macroMode = MODES.WHIP;
+  saveSettings();
+  rebuildTrayMenu();
+  if (overlay && !overlay.isDestroyed()) overlay.webContents.send('mode-changed');
+  return {
+    whipPhrases: whipPhrases.slice(),
+    quickModes: quickModes.map(m => ({ ...m })),
+  };
+});
 
 // ── Macro dispatch ─────────────────────────────────────────────────────────
 function sendMacro(frontmost) {
