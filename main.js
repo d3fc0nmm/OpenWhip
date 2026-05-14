@@ -374,7 +374,7 @@ ipcMain.handle('prefs:get', () => {
   };
 });
 
-ipcMain.handle('prefs:save', (event, payload) => {
+ipcMain.handle('prefs:save', async (event, payload) => {
   const incomingPhrases = Array.isArray(payload?.whipPhrases)
     ? payload.whipPhrases
         .filter(x => typeof x === 'string')
@@ -394,7 +394,7 @@ ipcMain.handle('prefs:save', (event, payload) => {
     payload?.confirmDeleteId === macroMode &&
     !incomingQuick.some(m => m.id === macroMode);
   if (deletingActive) {
-    const choice = dialog.showMessageBoxSync(prefsWindow || null, {
+    const { response: choice } = await dialog.showMessageBox(prefsWindow || null, {
       type: 'warning',
       buttons: ['Cancel', 'Remove and switch to Whip'],
       defaultId: 0,
