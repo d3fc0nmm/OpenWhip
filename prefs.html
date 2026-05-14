@@ -111,9 +111,10 @@
         b.className = 'del';
         b.textContent = '×';
         b.title = 'Remove';
-        b.onclick = () => {
+        b.onclick = async () => {
+          b.disabled = true;
           state.whipPhrases.splice(idx, 1);
-          save();
+          await save();
         };
         row.appendChild(t);
         row.appendChild(b);
@@ -147,6 +148,7 @@
       b.textContent = '×';
       b.title = 'Remove';
       b.onclick = async () => {
+        b.disabled = true;
         const res = await window.prefs.saveMessages({
           whipPhrases: state.whipPhrases,
           quickModes: state.quickModes.filter((_, i) => i !== idx),
@@ -227,12 +229,13 @@
   $('phrase-input').addEventListener('keydown', e => {
     if (e.key === 'Enter' && !$('phrase-add').disabled) $('phrase-add').click();
   });
-  $('phrase-add').onclick = () => {
+  $('phrase-add').onclick = async () => {
     const v = $('phrase-input').value.trim();
     if (!v) return;
+    $('phrase-add').disabled = true;
     state.whipPhrases.push(v);
     $('phrase-input').value = '';
-    save();
+    await save();
   };
 
   $('quick-label').addEventListener('input', validateQuickInput);
@@ -240,14 +243,15 @@
   $('quick-text').addEventListener('keydown', e => {
     if (e.key === 'Enter' && !$('quick-add').disabled) $('quick-add').click();
   });
-  $('quick-add').onclick = () => {
+  $('quick-add').onclick = async () => {
     const label = $('quick-label').value.trim();
     const text = $('quick-text').value.trim();
     if (!label || !text) return;
+    $('quick-add').disabled = true;
     state.quickModes.push({ id: uniqueId(label), label, text });
     $('quick-label').value = '';
     $('quick-text').value = '';
-    save();
+    await save();
   };
 
   $('reset').onclick = async () => {
