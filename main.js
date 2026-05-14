@@ -515,7 +515,9 @@ function sendTypeText(text, frontmost) {
   } else if (process.platform === 'darwin') {
     const escaped = text.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
     if (frontmost === 'iTerm2') {
-      const script = `tell application "iTerm2" to tell current session of current window to write text "${escaped}" newline yes`;
+      // Hard-code a CR (ASCII 13) instead of using `newline yes` (which writes LF).
+      // TUI apps that distinguish the two treat CR as Enter and LF as a literal newline.
+      const script = `tell application "iTerm2" to tell current session of current window to write text ("${escaped}" & (ASCII character 13)) newline no`;
       execFile('osascript', ['-e', script], err => {
         if (err) console.warn(`iterm "${text}" macro failed:`, err.message);
       });
@@ -579,7 +581,7 @@ function sendMacroMac(text, frontmost) {
       '  tell current session of current window',
       '    write text (ASCII character 3) newline no',
       '    delay 0.3',
-      `    write text "${escaped}" newline yes`,
+      `    write text ("${escaped}" & (ASCII character 13)) newline no`,
       '  end tell',
       'end tell',
     ].join('\n');
