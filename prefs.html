@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>OpenWhip · Messages</title>
+<style>
+  :root {
+    --bg: #1c1c1c;
+    --fg: #f3f3f3;
+    --muted: #8a8a8a;
+    --border: #333;
+    --row-bg: #232323;
+    --accent: #ff7a59;
+    --danger: #b94747;
+  }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    height: 100%;
+  }
+  body { padding: 16px; box-sizing: border-box; display: flex; flex-direction: column; gap: 14px; }
+  h2 { margin: 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+  .hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .warn { font-size: 11px; color: var(--accent); margin-top: 4px; }
+  .list { border: 1px solid var(--border); border-radius: 8px; padding: 4px; max-height: 200px; overflow-y: auto; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; border-radius: 6px; }
+  .row + .row { margin-top: 2px; }
+  .row:hover { background: var(--row-bg); }
+  .row .text { flex: 1; word-break: break-word; }
+  .row .label-text { flex: 0 0 35%; font-weight: 600; }
+  .row .body-text { flex: 1; color: var(--muted); }
+  .row .del { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 14px; padding: 2px 6px; }
+  .row .del:hover { color: var(--danger); }
+  .empty { padding: 14px; color: var(--muted); text-align: center; font-style: italic; }
+  .add-row { display: flex; gap: 6px; margin-top: 8px; }
+  .add-row input { flex: 1; background: var(--row-bg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; color: var(--fg); font: inherit; }
+  .add-row input:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
+  .add-row button { background: var(--accent); border: 0; color: #111; border-radius: 6px; padding: 6px 12px; cursor: pointer; font: inherit; font-weight: 600; }
+  .add-row button:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; }
+  footer { display: flex; justify-content: space-between; padding-top: 8px; border-top: 1px solid var(--border); }
+  footer button { background: none; border: 1px solid var(--border); color: var(--fg); border-radius: 6px; padding: 6px 12px; cursor: pointer; font: inherit; }
+  footer button.primary { background: var(--accent); color: #111; border-color: var(--accent); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<section>
+  <h2>Whip phrases</h2>
+  <div class="hint">Random pick on each whip crack.</div>
+  <div id="warn-empty" class="warn" style="display:none">Add at least one phrase, or Whip will just press Enter.</div>
+  <div id="phrase-list" class="list"></div>
+  <div class="add-row">
+    <input id="phrase-input" maxlength="200" placeholder="Type a new phrase…">
+    <button id="phrase-add" disabled>Add</button>
+  </div>
+  <div id="phrase-hint" class="hint" style="display:none"></div>
+</section>
+
+<section>
+  <h2>Quick modes</h2>
+  <div class="hint">Each one becomes a Mode-submenu option that types its text and presses Enter.</div>
+  <div id="quick-list" class="list"></div>
+  <div class="add-row">
+    <input id="quick-label" maxlength="80" placeholder="Label (e.g. ship it)">
+    <input id="quick-text" maxlength="200" placeholder="Text to type">
+    <button id="quick-add" disabled>Add</button>
+  </div>
+  <div id="quick-hint" class="hint" style="display:none"></div>
+</section>
+
+<footer>
+  <button id="reset">Reset defaults</button>
+  <button id="done" class="primary">Done</button>
+</footer>
+
+<script>
+  let state = { whipPhrases: [], quickModes: [] };
+
+  const $ = id => document.getElementById(id);
+
+  function slugify(label) {
+    return label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'mode';
+  }
+  function uniqueId(label) {
+    const base = slugify(label);
+    if (!state.quickModes.some(m => m.id === base)) return base;
+    let n = 2;
+    while (state.quickModes.some(m => m.id === `${base}_${n}`)) n++;
+    return `${base}_${n}`;
+  }
+
+  function renderPhrases() {
+    const list = $('phrase-list');
+    list.innerHTML = '';
+    if (state.whipPhrases.length === 0) {
+      const e = document.createElement('div');
+      e.className = 'empty';
+      e.textContent = 'No phrases yet.';
+      list.appendChild(e);
+    } else {
+      state.whipPhrases.forEach((p, idx) => {
+        const row = document.createElement('div');
+        row.className = 'row';
+        const t = document.createElement('div');
+        t.className = 'text';
+        t.textContent = p;
+        const b = document.createElement('button');
+        b.className = 'del';
+        b.textContent = '×';
+        b.title = 'Remove';
+        b.onclick = () => {
+          state.whipPhrases.splice(idx, 1);
+          save();
+        };
+        row.appendChild(t);
+        row.appendChild(b);
+        list.appendChild(row);
+      });
+    }
+    $('warn-empty').style.display = state.whipPhrases.length === 0 ? '' : 'none';
+  }
+
+  function renderQuick() {
+    const list = $('quick-list');
+    list.innerHTML = '';
+    if (state.quickModes.length === 0) {
+      const e = document.createElement('div');
+      e.className = 'empty';
+      e.textContent = 'No quick modes yet.';
+      list.appendChild(e);
+      return;
+    }
+    state.quickModes.forEach((m, idx) => {
+      const row = document.createElement('div');
+      row.className = 'row';
+      const l = document.createElement('div');
+      l.className = 'text label-text';
+      l.textContent = m.label;
+      const t = document.createElement('div');
+      t.className = 'text body-text';
+      t.textContent = `→ ${m.text}`;
+      const b = document.createElement('button');
+      b.className = 'del';
+      b.textContent = '×';
+      b.title = 'Remove';
+      b.onclick = async () => {
+        const res = await window.prefs.saveMessages({
+          whipPhrases: state.whipPhrases,
+          quickModes: state.quickModes.filter((_, i) => i !== idx),
+          confirmDeleteId: m.id,
+        });
+        state = { whipPhrases: res.whipPhrases, quickModes: res.quickModes };
+        renderAll();
+      };
+      row.appendChild(l);
+      row.appendChild(t);
+      row.appendChild(b);
+      list.appendChild(row);
+    });
+  }
+
+  function renderAll() {
+    renderPhrases();
+    renderQuick();
+    validatePhraseInput();
+    validateQuickInput();
+  }
+
+  function validatePhraseInput() {
+    const v = $('phrase-input').value.trim();
+    const hint = $('phrase-hint');
+    const btn = $('phrase-add');
+    let msg = '';
+    if (!v) {
+      msg = '';
+      btn.disabled = true;
+    } else if (v.length > 200) {
+      msg = 'Too long (max 200 characters).';
+      btn.disabled = true;
+    } else if (state.whipPhrases.some(p => p.toLowerCase() === v.toLowerCase())) {
+      msg = 'Already in list.';
+      btn.disabled = true;
+    } else {
+      msg = '';
+      btn.disabled = false;
+    }
+    hint.textContent = msg;
+    hint.style.display = msg ? '' : 'none';
+  }
+
+  function validateQuickInput() {
+    const label = $('quick-label').value.trim();
+    const text = $('quick-text').value.trim();
+    const hint = $('quick-hint');
+    const btn = $('quick-add');
+    let msg = '';
+    if (!label || !text) {
+      msg = '';
+      btn.disabled = true;
+    } else if (label.length > 80 || text.length > 200) {
+      msg = 'Too long.';
+      btn.disabled = true;
+    } else if (state.quickModes.some(m => m.label.toLowerCase() === label.toLowerCase())) {
+      msg = 'Label already in list.';
+      btn.disabled = true;
+    } else {
+      msg = '';
+      btn.disabled = false;
+    }
+    hint.textContent = msg;
+    hint.style.display = msg ? '' : 'none';
+  }
+
+  async function save() {
+    const res = await window.prefs.saveMessages({
+      whipPhrases: state.whipPhrases,
+      quickModes: state.quickModes,
+    });
+    state = { whipPhrases: res.whipPhrases, quickModes: res.quickModes };
+    renderAll();
+  }
+
+  $('phrase-input').addEventListener('input', validatePhraseInput);
+  $('phrase-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !$('phrase-add').disabled) $('phrase-add').click();
+  });
+  $('phrase-add').onclick = () => {
+    const v = $('phrase-input').value.trim();
+    if (!v) return;
+    state.whipPhrases.push(v);
+    $('phrase-input').value = '';
+    save();
+  };
+
+  $('quick-label').addEventListener('input', validateQuickInput);
+  $('quick-text').addEventListener('input', validateQuickInput);
+  $('quick-text').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !$('quick-add').disabled) $('quick-add').click();
+  });
+  $('quick-add').onclick = () => {
+    const label = $('quick-label').value.trim();
+    const text = $('quick-text').value.trim();
+    if (!label || !text) return;
+    state.quickModes.push({ id: uniqueId(label), label, text });
+    $('quick-label').value = '';
+    $('quick-text').value = '';
+    save();
+  };
+
+  $('reset').onclick = async () => {
+    if (!confirm('Reset whip phrases and quick modes to the OpenWhip defaults? Your current entries will be discarded.')) return;
+    const res = await window.prefs.resetDefaults();
+    state = { whipPhrases: res.whipPhrases, quickModes: res.quickModes };
+    renderAll();
+  };
+
+  $('done').onclick = () => window.close();
+
+  (async () => {
+    const res = await window.prefs.getMessages();
+    state = { whipPhrases: res.whipPhrases, quickModes: res.quickModes };
+    renderAll();
+  })();
+</script>
+
+</body>
+</html>
