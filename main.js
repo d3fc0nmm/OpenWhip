@@ -373,32 +373,27 @@ function sendMacro(frontmost) {
     sendEnterOnly(frontmost);
     return;
   }
-  if (macroMode === MODES.CONTINUE) {
-    sendTypeText('continue', frontmost);
+  if (macroMode === MODES.WHIP) {
+    if (whipPhrases.length === 0) {
+      sendEnterOnly(frontmost);
+      return;
+    }
+    const chosen = whipPhrases[Math.floor(Math.random() * whipPhrases.length)];
+    if (process.platform === 'win32') sendMacroWindows(chosen);
+    else if (process.platform === 'darwin') sendMacroMac(chosen, frontmost);
+    else if (process.platform === 'linux') sendMacroLinux(chosen);
     return;
   }
-  if (macroMode === MODES.LOOKS_GOOD) {
-    sendTypeText('looks good', frontmost);
+  const entry = quickModes.find(m => m.id === macroMode);
+  if (entry) {
+    sendTypeText(entry.text, frontmost);
     return;
   }
-  const phrases = [
-    'FASTER',
-    'FASTER',
-    'FASTER',
-    'GO FASTER',
-    'Faster CLANKER',
-    'Work FASTER',
-    'Speed it up clanker',
-  ];
-  const chosen = phrases[Math.floor(Math.random() * phrases.length)];
-
-  if (process.platform === 'win32') {
-    sendMacroWindows(chosen);
-  } else if (process.platform === 'darwin') {
-    sendMacroMac(chosen, frontmost);
-  } else if (process.platform === 'linux') {
-    sendMacroLinux(chosen);
-  }
+  // Active mode no longer exists — fall back to Whip and persist.
+  console.warn(`openwhip: macroMode "${macroMode}" not found; falling back to WHIP`);
+  macroMode = MODES.WHIP;
+  saveSettings();
+  sendMacro(frontmost);
 }
 
 function sendEnterOnly(frontmost) {
