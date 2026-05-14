@@ -569,8 +569,18 @@ function sendMacroLinux(text) {
 // makes the menu the primary left-click action and Electron dispatches the
 // `click` event inconsistently. Splitting gestures (left = toggle overlay,
 // right = pop menu manually) keeps drop-on-left-click reliable.
+function openPrefsWindow() {
+  console.log('openPrefsWindow: not implemented yet');
+}
+
 function rebuildTrayMenu() {
   if (!tray) return;
+  const quickModeItems = quickModes.map(m => ({
+    label: `Type  "${m.label}"  + Enter`,
+    type: 'radio',
+    checked: macroMode === m.id,
+    click: () => setMode(m.id),
+  }));
   trayMenu = Menu.buildFromTemplate([
     {
       label: 'Mode',
@@ -581,18 +591,7 @@ function rebuildTrayMenu() {
           checked: macroMode === MODES.WHIP,
           click: () => setMode(MODES.WHIP),
         },
-        {
-          label: 'Type  "continue"  + Enter',
-          type: 'radio',
-          checked: macroMode === MODES.CONTINUE,
-          click: () => setMode(MODES.CONTINUE),
-        },
-        {
-          label: 'Type  "looks good"  + Enter',
-          type: 'radio',
-          checked: macroMode === MODES.LOOKS_GOOD,
-          click: () => setMode(MODES.LOOKS_GOOD),
-        },
+        ...quickModeItems,
         {
           label: 'Press Enter only',
           type: 'radio',
@@ -601,6 +600,8 @@ function rebuildTrayMenu() {
         },
       ],
     },
+    { type: 'separator' },
+    { label: 'Messages…', click: () => openPrefsWindow() },
     { type: 'separator' },
     { label: 'Quit', click: () => app.quit() },
   ]);
